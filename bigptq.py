@@ -101,6 +101,7 @@ class BRAGPTQ:
             mask[0] = mask1
             mask[1] = mask2
             mask[2] = mask3
+            mark_step(self.dev)
 
             assert self.braq_quantizer.groupsize % blocksize == 0
 
@@ -147,6 +148,8 @@ class BRAGPTQ:
                     err1 = (w - q) / d
                     Err1[:, i] = err1
 
+                # Cut before the offset-dependent update of W, so the column loop above compiles once per shape.
+                mark_step(self.dev)
                 W[:, col_st:col_ed] = Q1
                 Losses += torch.sum(Losses1, 1) / 2
 
