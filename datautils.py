@@ -103,7 +103,7 @@ def get_c4(nsamples, seed, seqlen, model, tokenizer):
 def get_loaders(name, nsamples=128, seed=0, seqlen=2048, model=''):
     cache_file=f'cache/{name}_{nsamples}_{seed}_{seqlen}_{model}.pt'
     try:
-        return torch.load(cache_file)
+        return torch.load(cache_file, weights_only=False)
     except:
         pass
 
