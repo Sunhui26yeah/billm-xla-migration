@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from bigptq import BRAGPTQ
 from binary import Binarization
-from modelutils import find_layers, get_device, mark_step
+from modelutils import find_layers, get_device, mark_step, log_xla_metrics
 
 
 def get_model(model):
@@ -171,6 +171,7 @@ def quant_sequential(model, dataloader, dev):
         torch.cuda.empty_cache()
 
         inps, outs = outs, inps
+        log_xla_metrics(dev, f"layer {i}")
 
     model.config.use_cache = use_cache
 
@@ -281,6 +282,7 @@ if __name__ == "__main__":
         )
         quant_sequential(model, dataloader, device)
         print("quantization time:", time.time() - tick, "s")
+        log_xla_metrics(device, "after quantization", "xla_metrics_quant.txt")
 
     if args.save:
         save_path = os.path.dirname(save_file)
@@ -301,3 +303,5 @@ if __name__ == "__main__":
             from eval_ppl_utils import llama_eval
 
             llama_eval(model, testloader, device, dataset, args.log_wandb)
+
+    log_xla_metrics(device, "end of run", "xla_metrics_final.txt")
