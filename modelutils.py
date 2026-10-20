@@ -22,3 +22,12 @@ def find_layers(module, layers=[nn.Conv2d, nn.Linear], name=''):
             child, layers=layers, name=name + '.' + name1 if name != '' else name1
         ))
     return res
+
+
+def device_sync(dev):
+    '''Wait for pending work on `dev`: cut and run the lazy graph on XLA, synchronize on CUDA.'''
+    if dev.type == 'xla':
+        import torch_xla
+        torch_xla.sync(wait=True)
+    elif dev.type == 'cuda':
+        torch.cuda.synchronize()
