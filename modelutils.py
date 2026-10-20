@@ -5,6 +5,14 @@ import torch.nn as nn
 DEV = torch.device('cuda:0')
 
 
+def get_device(name):
+    '''Return the torch device for `name`; any name starting with "xla" selects the PyTorch/XLA (TPU) device.'''
+    if name.startswith('xla'):
+        import torch_xla
+        return torch_xla.device()
+    return torch.device(name)
+
+
 def find_layers(module, layers=[nn.Conv2d, nn.Linear], name=''):
     if type(module) in layers:
         return {name: module}

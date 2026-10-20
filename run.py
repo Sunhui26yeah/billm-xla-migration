@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from bigptq import BRAGPTQ
 from binary import Binarization
-from modelutils import find_layers
+from modelutils import find_layers, get_device
 
 
 def get_model(model):
@@ -229,7 +229,7 @@ if __name__ == "__main__":
         "--device",
         type=str,
         default="cuda:0",
-        help="set the device to use for quantization.",
+        help="set the device to use for quantization; `xla` selects the TPU via PyTorch/XLA.",
     )
     parser.add_argument(
         "--disable_gptq",
@@ -260,7 +260,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     groupsize = args.blocksize
 
-    device = args.device
+    device = get_device(args.device)
     save_title = f"{args.model}_{args.dataset}_{args.low_quant_method}_{groupsize}_{args.salient_metric}"
     save_file = "./output/" + save_title.replace("/", "_") + ".pt"
     if args.load_quantized:
