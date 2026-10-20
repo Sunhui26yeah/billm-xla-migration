@@ -21,7 +21,7 @@ def high_order_residual(x, mask, order=2):
     index += 1
     for od in range(order):
         residual = new_matrix - sum_order
-        masked_x_tensor = torch.where(mask, residual, torch.tensor(float('nan')))
+        masked_x_tensor = torch.where(mask, residual, torch.tensor(float('nan'), device=residual.device))
 
         mean_tensor_all = torch.nanmean(masked_x_tensor, dim=1)
         mean_tensor_all = torch.where(torch.isnan(mean_tensor_all), torch.zeros_like(mean_tensor_all), mean_tensor_all)
