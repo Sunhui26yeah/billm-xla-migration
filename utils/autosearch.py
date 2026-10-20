@@ -4,6 +4,7 @@ from pyparsing import line
 import torch
 from binary import high_order_residual
 from utils.mask import generate_structural_mask
+from modelutils import mark_step
 
 def error_computing(origin_matrix, quantized_matrix):
     mse = torch.mean((origin_matrix - quantized_matrix) ** 2)
@@ -34,6 +35,8 @@ def structural_searching(origin_matrix, up_lim=30):
     error = []
     lines = []
     # search for the optimal split for the first group, high order=2,, structured search
+    # The candidate errors stay on the device and the first minimum is taken once (same result as the
+    # sequential strict `<` scan), instead of one host sync per candidate.
     _, top_braq_2_columns = torch.topk(true_counts, up_lim)
     for i in range(1, up_lim):
         mask3 = torch.full((origin_matrix.shape[0], origin_matrix.shape[1]), False).to(origin_matrix.device)
@@ -42,16 +45,16 @@ def structural_searching(origin_matrix, up_lim=30):
 
         group4 = high_order_residual(origin_matrix, ~mask3, order=2)
         quantize_error_0 = error_computing(origin_matrix, group4+group3)
-        error.append(quantize_error_0.item())
+        error.append(quantize_error_0)
         lines.append(i)
-        if quantize_error_0 < minimal_value_0:
-            minimal_value_0 = quantize_error_0
-            optimal_split_0 = i
+    optimal_split_0 = int(torch.argmin(torch.stack(error)).item()) + 1
 
     _, top_braq_2_columns = torch.topk(true_counts, optimal_split_0)
     mask3 = torch.full((origin_matrix.shape[0], origin_matrix.shape[1]), False).to(origin_matrix.device)
     mask3[:, top_braq_2_columns] = True
     group3 = high_order_residual(origin_matrix, mask3, order=2)
+    # Materialize mask3/group3 so the graphs below do not depend on the data-dependent optimal_split_0.
+    mark_step(origin_matrix.device)
 
     search_matrix = origin_matrix * (~mask3)
 
@@ -62,16 +65,16 @@ def structural_searching(origin_matrix, up_lim=30):
     ).to(origin_matrix.device)
 
     # search for the optimal split for the second group, high order=1,, non-structured search
+    errors = []
     for split_value in percentile_values:
         mask1, mask2 = generate_structural_mask(origin_matrix, mask3, split_value)
         group1 = high_order_residual(origin_matrix, mask1, order=1)
         group2 = high_order_residual(origin_matrix, mask2, order=1)
 
         quantize_error = error_computing(origin_matrix, group1+group2+group3)
-        if quantize_error < minimal_value:
-            minimal_value = quantize_error
-            optimal_split = split_value
-        tmp = torch.max(torch.abs(search_matrix)).item()
+        errors.append(quantize_error)
+    # First minimum, as the sequential strict `<` scan; indexed by a device tensor so no host sync is needed.
+    optimal_split = percentile_values[torch.argmin(torch.stack(errors))]
     
     return optimal_split, mask3
 
