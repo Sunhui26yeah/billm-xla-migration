@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from bigptq import BRAGPTQ
 from binary import Binarization
-from modelutils import find_layers, get_device
+from modelutils import find_layers, get_device, mark_step
 
 
 def get_model(model):
@@ -148,6 +148,7 @@ def quant_sequential(model, dataloader, dev):
             handles.append(subset[name].register_forward_hook(add_batch(name)))
         for j in range(args.nsamples):
             outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask)[0]
+            mark_step(dev)
         for h in handles:
             h.remove()
 
@@ -162,6 +163,7 @@ def quant_sequential(model, dataloader, dev):
 
         for j in range(args.nsamples):
             outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask)[0]
+            mark_step(dev)
 
         layers[i] = layer.cpu()
         del layer

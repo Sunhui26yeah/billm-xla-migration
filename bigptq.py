@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import transformers
 from utils.structure import structural_guassian_distribution
-from modelutils import device_sync
+from modelutils import device_sync, mark_step
 
 DEBUG = False
 
@@ -151,6 +151,8 @@ class BRAGPTQ:
                     self.layer.weight.data[:, col_ed:] = W[:, col_ed:]
                     print(torch.sum((self.layer(self.inp1) - self.out1) ** 2))
                     print(torch.sum(Losses))
+
+            mark_step(self.dev)
 
         device_sync(self.dev)
         print("time %.2f" % (time.time() - tick))

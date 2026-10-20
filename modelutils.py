@@ -31,3 +31,10 @@ def device_sync(dev):
         torch_xla.sync(wait=True)
     elif dev.type == 'cuda':
         torch.cuda.synchronize()
+
+
+def mark_step(dev):
+    '''On XLA, cut the lazy graph here so loops do not build one ever-growing graph; no-op elsewhere.'''
+    if dev.type == 'xla':
+        import torch_xla
+        torch_xla.sync()
