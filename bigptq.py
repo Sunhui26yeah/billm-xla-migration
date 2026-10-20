@@ -90,8 +90,14 @@ class BRAGPTQ:
 
             st = col_st
             ed = col_ed
-            mask = torch.zeros_like(W[:, st:ed], dtype=torch.bool).unsqueeze(0).repeat_interleave(partition, dim=0)
-            mask1, mask2, mask3 = structural_guassian_distribution(W[:, st:ed], H[st:ed, st:ed], self.salient_metric, 50)
+            # Materialize this block's slices as device data, so the search and GPTQ graphs below
+            # depend only on shapes (not on the block offset) and XLA reuses them across blocks.
+            W_blk = W[:, st:ed].clone()
+            H_blk = H[st:ed, st:ed].clone()
+            Hinv_blk = Hinv[st:ed, st:ed].clone()
+            mark_step(self.dev)
+            mask = torch.zeros_like(W_blk, dtype=torch.bool).unsqueeze(0).repeat_interleave(partition, dim=0)
+            mask1, mask2, mask3 = structural_guassian_distribution(W_blk, H_blk, self.salient_metric, 50)
             mask[0] = mask1
             mask[1] = mask2
             mask[2] = mask3
@@ -114,11 +120,11 @@ class BRAGPTQ:
                 W[:, col_st:col_ed] = q
             else:
                 # shape of W1: [oc, n_cols]
-                W1 = W[:, col_st:col_ed].clone()
+                W1 = W_blk.clone()
                 Q1 = torch.zeros_like(W1)
                 Err1 = torch.zeros_like(W1)
                 Losses1 = torch.zeros_like(W1)
-                Hinv1 = Hinv[col_st:col_ed, col_st:col_ed]
+                Hinv1 = Hinv_blk
 
                 q_part_groups = []
 
