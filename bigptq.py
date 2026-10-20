@@ -71,8 +71,9 @@ class BRAGPTQ:
         H = self.H
         del self.H
         dead = torch.diag(H) == 0
-        H[dead, dead] = 1
-        W[:, dead] = 0
+        # where() instead of boolean indexing, which needs aten::nonzero (CPU fallback on XLA)
+        H = torch.where(torch.diag(dead), torch.ones_like(H), H)
+        W = torch.where(dead.unsqueeze(0), torch.zeros_like(W), W)
 
         Losses = torch.zeros(self.rows, device=self.dev)
 
