@@ -80,9 +80,10 @@ class BRAGPTQ:
         damp = percdamp * torch.mean(torch.diag(H))
         diag = torch.arange(self.columns, device=self.dev)
         H[diag, diag] += damp
-        H = torch.linalg.cholesky(H)
-        H = torch.cholesky_inverse(H)
-        H = torch.linalg.cholesky(H, upper=True)
+        # H^-1 = cholesky_inverse(cholesky(H)), then its upper Cholesky factor; computed with ops XLA lowers
+        # (linalg_cholesky_ex and cholesky_inverse fall back to CPU).
+        H = torch.linalg.inv(H)
+        H = torch.cholesky(H, upper=True)
         Hinv = H
 
         for blocki, col_st in enumerate(range(0, self.columns, blocksize)):
