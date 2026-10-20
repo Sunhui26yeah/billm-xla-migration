@@ -3,6 +3,8 @@ import time
 import torch
 import torch.nn as nn
 
+from modelutils import mark_step
+
 
 
 @torch.no_grad()
@@ -58,6 +60,7 @@ def llama_eval(model, testenc, dev,  dataset: str, log_wandb: bool = False):
 
         for j in range(nsamples):
             outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask)[0]
+            mark_step(dev)
         layers[i] = layer.cpu()
         del layer
         torch.cuda.empty_cache()
@@ -82,6 +85,7 @@ def llama_eval(model, testenc, dev,  dataset: str, log_wandb: bool = False):
         )
         neg_log_likelihood = loss.float() * model.seqlen
         nlls.append(neg_log_likelihood)
+        mark_step(dev)
     ppl = torch.exp(torch.stack(nlls).sum() / (nsamples * model.seqlen))
     print(f"Perplexity: {ppl.item():3f}")
 
@@ -148,6 +152,7 @@ def opt_eval(model, testenc, dev, dataset: str, log_wandb: bool = False):
 
         for j in range(nsamples):
             outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask)[0]
+            mark_step(dev)
         layers[i] = layer.cpu()
         del layer
         torch.cuda.empty_cache()
@@ -176,6 +181,7 @@ def opt_eval(model, testenc, dev, dataset: str, log_wandb: bool = False):
         loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         neg_log_likelihood = loss.float() * model.seqlen
         nlls.append(neg_log_likelihood)
+        mark_step(dev)
     ppl = torch.exp(torch.stack(nlls).sum() / (nsamples * model.seqlen))
     print(f"Perplexity: {ppl.item():3f}")
     print({f'{dataset}/perplexity': ppl.item()})

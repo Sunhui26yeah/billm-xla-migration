@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from bigptq import BRAGPTQ
 from binary import Binarization
-from modelutils import find_layers
+from modelutils import find_layers, get_device, mark_step, log_xla_metrics
 
 
 def get_model(model):
@@ -148,6 +148,7 @@ def quant_sequential(model, dataloader, dev):
             handles.append(subset[name].register_forward_hook(add_batch(name)))
         for j in range(args.nsamples):
             outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask)[0]
+            mark_step(dev)
         for h in handles:
             h.remove()
 
@@ -162,6 +163,7 @@ def quant_sequential(model, dataloader, dev):
 
         for j in range(args.nsamples):
             outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask)[0]
+            mark_step(dev)
 
         layers[i] = layer.cpu()
         del layer
@@ -169,6 +171,7 @@ def quant_sequential(model, dataloader, dev):
         torch.cuda.empty_cache()
 
         inps, outs = outs, inps
+        log_xla_metrics(dev, f"layer {i}")
 
     model.config.use_cache = use_cache
 
@@ -229,7 +232,7 @@ if __name__ == "__main__":
         "--device",
         type=str,
         default="cuda:0",
-        help="set the device to use for quantization.",
+        help="set the device to use for quantization; `xla` selects the TPU via PyTorch/XLA.",
     )
     parser.add_argument(
         "--disable_gptq",
@@ -260,7 +263,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     groupsize = args.blocksize
 
-    device = args.device
+    device = get_device(args.device)
     save_title = f"{args.model}_{args.dataset}_{args.low_quant_method}_{groupsize}_{args.salient_metric}"
     save_file = "./output/" + save_title.replace("/", "_") + ".pt"
     if args.load_quantized:
@@ -279,6 +282,7 @@ if __name__ == "__main__":
         )
         quant_sequential(model, dataloader, device)
         print("quantization time:", time.time() - tick, "s")
+        log_xla_metrics(device, "after quantization", "xla_metrics_quant.txt")
 
     if args.save:
         save_path = os.path.dirname(save_file)
@@ -299,3 +303,5 @@ if __name__ == "__main__":
             from eval_ppl_utils import llama_eval
 
             llama_eval(model, testloader, device, dataset, args.log_wandb)
+
+    log_xla_metrics(device, "end of run", "xla_metrics_final.txt")

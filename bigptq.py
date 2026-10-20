@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import transformers
 from utils.structure import structural_guassian_distribution
+from modelutils import device_sync, mark_step
 
 DEBUG = False
 
@@ -151,7 +152,9 @@ class BRAGPTQ:
                     print(torch.sum((self.layer(self.inp1) - self.out1) ** 2))
                     print(torch.sum(Losses))
 
-        torch.cuda.synchronize()
+            mark_step(self.dev)
+
+        device_sync(self.dev)
         print("time %.2f" % (time.time() - tick))
         print("error", torch.sum(Losses).item())
 
