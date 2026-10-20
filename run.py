@@ -272,6 +272,9 @@ if __name__ == "__main__":
     else: # braq
         model = get_model(args.model)
         model.eval()
+        if device.type == "xla":
+            # TPUs have no fp16 path (fp16 Linear lowers to mixed f16/f32 HLO): run the fp16 checkpoint in fp32.
+            model = model.float()
         tick = time.time()
         dataloader, testloader = get_loaders(
             args.dataset,
