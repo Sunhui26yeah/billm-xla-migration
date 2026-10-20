@@ -9,6 +9,9 @@ def get_device(name):
     '''Return the torch device for `name`; any name starting with "xla" selects the PyTorch/XLA (TPU) device.'''
     if name.startswith('xla'):
         import torch_xla
+        import torch_xla.backends
+        # The original disables TF32 (full fp32 matmuls); the TPU default f32 matmul precision is lower.
+        torch_xla.backends.set_mat_mul_precision('highest')
         return torch_xla.device()
     return torch.device(name)
 
