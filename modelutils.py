@@ -59,4 +59,7 @@ def log_xla_metrics(dev, tag, report_path=None):
 def to_xla_compute(model):
     '''Run a (fp16) checkpoint in fp32 on XLA, keeping the checkpoint dtype as `model.act_dtype` for stored activations.'''
     model.act_dtype = next(iter(model.parameters())).dtype
+    for m in model.modules():
+        if isinstance(m, nn.Linear):
+            m.storage_dtype = model.act_dtype
     return model.float()
