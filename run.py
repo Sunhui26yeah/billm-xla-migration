@@ -295,7 +295,12 @@ if __name__ == "__main__":
         save_path = os.path.dirname(save_file)
         if not os.path.exists(save_path):
             os.makedirs(save_path)
-        model.save_pretrained(save_file)
+        if hasattr(model, "act_dtype"):
+            # Save in the checkpoint dtype (fp16), as the original does, then continue in fp32 on XLA.
+            model.to(model.act_dtype).save_pretrained(save_file)
+            model.float()
+        else:
+            model.save_pretrained(save_file)
 
     for dataset in ["wikitext2", "ptb", "c4"]:
         dataloader, testloader = get_loaders(
