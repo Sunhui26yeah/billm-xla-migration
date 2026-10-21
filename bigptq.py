@@ -171,6 +171,9 @@ class BRAGPTQ:
 
         if isinstance(self.layer, transformers.Conv1D):
             W = W.t()
+        # On XLA the layer runs in fp32; round the binarized weights through the checkpoint dtype (fp16),
+        # as the original's write-back into the fp16 layer does.
+        W = W.to(getattr(self.layer, "storage_dtype", self.layer.weight.data.dtype))
         self.layer.weight.data = W.reshape(self.layer.weight.shape).to(
             self.layer.weight.data.dtype
         )
