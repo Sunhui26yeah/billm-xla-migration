@@ -111,8 +111,10 @@ def opt_eval(model, testenc, dev, dataset: str, log_wandb: bool = False):
     layers[0] = layers[0].to(dev)
 
     dtype = next(iter(model.parameters())).dtype
+    # Activations are stored in the checkpoint dtype (fp16, as on the GPU) and upcast per sample on XLA.
+    act_dtype = getattr(model, "act_dtype", dtype)
     inps = torch.zeros(
-        (nsamples, model.seqlen, model.config.hidden_size), dtype=dtype, device=dev
+        (nsamples, model.seqlen, model.config.hidden_size), dtype=act_dtype, device=dev
     )
     cache = {'i': 0, 'attention_mask': None}
 
@@ -151,7 +153,7 @@ def opt_eval(model, testenc, dev, dataset: str, log_wandb: bool = False):
         layer = layers[i].to(dev)
 
         for j in range(nsamples):
-            outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask)[0]
+            outs[j] = layer(inps[j].unsqueeze(0).to(dtype), attention_mask=attention_mask)[0]
             mark_step(dev)
         layers[i] = layer.cpu()
         del layer
@@ -167,7 +169,7 @@ def opt_eval(model, testenc, dev, dataset: str, log_wandb: bool = False):
     testenc = testenc.to(dev)
     nlls = []
     for i in range(nsamples):
-        hidden_states = inps[i].unsqueeze(0)
+        hidden_states = inps[i].unsqueeze(0).to(dtype)
         if model.model.decoder.final_layer_norm is not None:
             hidden_states = model.model.decoder.final_layer_norm(hidden_states)
         if model.model.decoder.project_out is not None:
