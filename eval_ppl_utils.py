@@ -3,7 +3,7 @@ import time
 import torch
 import torch.nn as nn
 
-from modelutils import mark_step
+from modelutils import mark_step, take, put
 
 
 
@@ -123,7 +123,7 @@ def opt_eval(model, testenc, dev, dataset: str, log_wandb: bool = False):
             super().__init__()
             self.module = module
         def forward(self, inp, **kwargs):
-            inps[cache['i']] = inp
+            put(inps, cache['i'], inp)
             cache['i'] += 1
             cache['attention_mask'] = kwargs['attention_mask']
             raise ValueError
@@ -153,7 +153,7 @@ def opt_eval(model, testenc, dev, dataset: str, log_wandb: bool = False):
         layer = layers[i].to(dev)
 
         for j in range(nsamples):
-            outs[j] = layer(inps[j].unsqueeze(0).to(dtype), attention_mask=attention_mask)[0]
+            put(outs, j, layer(take(inps, j).to(dtype), attention_mask=attention_mask)[0])
             mark_step(dev)
         layers[i] = layer.cpu()
         del layer
@@ -166,19 +166,18 @@ def opt_eval(model, testenc, dev, dataset: str, log_wandb: bool = False):
         model.model.decoder.project_out = model.model.decoder.project_out.to(dev)
     model.lm_head = model.lm_head.to(dev)
 
-    testenc = testenc.to(dev)
+    # Labels as a (nsamples, seqlen) device tensor, indexed like inps (see modelutils.take).
+    testenc = testenc[:, : nsamples * model.seqlen].view(nsamples, model.seqlen).to(dev)
     nlls = []
     for i in range(nsamples):
-        hidden_states = inps[i].unsqueeze(0).to(dtype)
+        hidden_states = take(inps, i).to(dtype)
         if model.model.decoder.final_layer_norm is not None:
             hidden_states = model.model.decoder.final_layer_norm(hidden_states)
         if model.model.decoder.project_out is not None:
             hidden_states = model.model.decoder.project_out(hidden_states)
         lm_logits = model.lm_head(hidden_states)
         shift_logits = lm_logits[:, :-1, :].contiguous()
-        shift_labels = testenc[
-            :, (i * model.seqlen):((i + 1) * model.seqlen)
-        ][:, 1:]
+        shift_labels = take(testenc, i)[:, 1:]
         loss_fct = nn.CrossEntropyLoss()
         loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         neg_log_likelihood = loss.float() * model.seqlen

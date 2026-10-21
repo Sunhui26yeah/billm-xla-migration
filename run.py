@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from bigptq import BRAGPTQ
 from binary import Binarization
-from modelutils import find_layers, get_device, mark_step, log_xla_metrics, to_xla_compute
+from modelutils import find_layers, get_device, mark_step, log_xla_metrics, to_xla_compute, take, put
 
 
 def get_model(model):
@@ -79,7 +79,7 @@ def quant_sequential(model, dataloader, dev):
             self.module = module
 
         def forward(self, inp, **kwargs):
-            inps[cache["i"]] = inp
+            put(inps, cache["i"], inp)
             cache["i"] += 1
             cache["attention_mask"] = kwargs["attention_mask"]
             raise ValueError
@@ -149,7 +149,7 @@ def quant_sequential(model, dataloader, dev):
         for name in gptq:
             handles.append(subset[name].register_forward_hook(add_batch(name)))
         for j in range(args.nsamples):
-            outs[j] = layer(inps[j].unsqueeze(0).to(dtype), attention_mask=attention_mask)[0]
+            put(outs, j, layer(take(inps, j).to(dtype), attention_mask=attention_mask)[0])
             mark_step(dev)
         for h in handles:
             h.remove()
@@ -164,7 +164,7 @@ def quant_sequential(model, dataloader, dev):
             gptq[name].free()
 
         for j in range(args.nsamples):
-            outs[j] = layer(inps[j].unsqueeze(0).to(dtype), attention_mask=attention_mask)[0]
+            put(outs, j, layer(take(inps, j).to(dtype), attention_mask=attention_mask)[0])
             mark_step(dev)
 
         layers[i] = layer.cpu()

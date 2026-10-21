@@ -63,3 +63,13 @@ def to_xla_compute(model):
         if isinstance(m, nn.Linear):
             m.storage_dtype = model.act_dtype
     return model.float()
+
+
+def take(x, i):
+    '''x[i:i+1] via a device index tensor: on XLA a Python-int index is baked into the graph (one compile per i).'''
+    return x.index_select(0, torch.tensor([i], device=x.device))
+
+
+def put(x, i, v):
+    '''x[i] = v via a device index tensor (see take); v has a leading dimension of 1.'''
+    x.index_copy_(0, torch.tensor([i], device=x.device), v.to(x.dtype))
