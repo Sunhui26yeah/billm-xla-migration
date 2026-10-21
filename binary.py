@@ -12,6 +12,11 @@ def part_mean(tensor, op='-'):
 
     return mean_val
 
+def masked_row_mean(x, mask):
+    # Same as torch.nanmean(torch.where(mask, x, nan), dim=1) without nansum (not lowered by XLA):
+    # rows with no masked element give 0/0 = NaN, as nanmean does.
+    return torch.where(mask, x, torch.zeros_like(x)).sum(dim=1) / mask.sum(dim=1)
+
 @torch.no_grad()
 def high_order_residual(x, mask, order=2):
     sum_order = torch.zeros_like(x)
@@ -23,10 +28,10 @@ def high_order_residual(x, mask, order=2):
         residual = new_matrix - sum_order
         masked_x_tensor = torch.where(mask, residual, torch.tensor(float('nan'), device=residual.device))
 
-        mean_tensor_all = torch.nanmean(masked_x_tensor, dim=1)
+        mean_tensor_all = masked_row_mean(masked_x_tensor, mask)
         mean_tensor_all = torch.where(torch.isnan(mean_tensor_all), torch.zeros_like(mean_tensor_all), mean_tensor_all)
         masked_x_tensor -= mean_tensor_all[:, None]
-        scale_tensor_all = torch.nanmean(torch.abs(masked_x_tensor), dim=1)
+        scale_tensor_all = masked_row_mean(torch.abs(masked_x_tensor), mask)
         scale_tensor_all = torch.where(torch.isnan(scale_tensor_all), torch.zeros_like(scale_tensor_all), scale_tensor_all)
 
         binary= torch.sign(masked_x_tensor)

@@ -71,17 +71,19 @@ class BRAGPTQ:
         H = self.H
         del self.H
         dead = torch.diag(H) == 0
-        H[dead, dead] = 1
-        W[:, dead] = 0
+        # where() instead of boolean indexing, which needs aten::nonzero (CPU fallback on XLA)
+        H = torch.where(torch.diag(dead), torch.ones_like(H), H)
+        W = torch.where(dead.unsqueeze(0), torch.zeros_like(W), W)
 
         Losses = torch.zeros(self.rows, device=self.dev)
 
         damp = percdamp * torch.mean(torch.diag(H))
         diag = torch.arange(self.columns, device=self.dev)
         H[diag, diag] += damp
-        H = torch.linalg.cholesky(H)
-        H = torch.cholesky_inverse(H)
-        H = torch.linalg.cholesky(H, upper=True)
+        # H^-1 = cholesky_inverse(cholesky(H)), then its upper Cholesky factor; computed with ops XLA lowers
+        # (linalg_cholesky_ex and cholesky_inverse fall back to CPU).
+        H = torch.linalg.inv(H)
+        H = torch.cholesky(H, upper=True)
         Hinv = H
 
         for blocki, col_st in enumerate(range(0, self.columns, blocksize)):
