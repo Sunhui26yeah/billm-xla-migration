@@ -54,3 +54,9 @@ def log_xla_metrics(dev, tag, report_path=None):
     if report_path:
         with open(report_path, 'w') as f:
             f.write(met.metrics_report())
+
+
+def to_xla_compute(model):
+    '''Run a (fp16) checkpoint in fp32 on XLA, keeping the checkpoint dtype as `model.act_dtype` for stored activations.'''
+    model.act_dtype = next(iter(model.parameters())).dtype
+    return model.float()

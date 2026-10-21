@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from bigptq import BRAGPTQ
 from binary import Binarization
-from modelutils import find_layers, get_device, mark_step, log_xla_metrics
+from modelutils import find_layers, get_device, mark_step, log_xla_metrics, to_xla_compute
 
 
 def get_model(model):
@@ -66,8 +66,10 @@ def quant_sequential(model, dataloader, dev):
     layers[0] = layers[0].to(dev)
 
     dtype = next(iter(model.parameters())).dtype
+    # Activations are stored in the checkpoint dtype (fp16, as on the GPU) and upcast per sample on XLA.
+    act_dtype = getattr(model, "act_dtype", dtype)
     inps = torch.zeros(
-        (args.nsamples, model.seqlen, model.config.hidden_size), dtype=dtype, device=dev
+        (args.nsamples, model.seqlen, model.config.hidden_size), dtype=act_dtype, device=dev
     )
     cache = {"i": 0, "attention_mask": None}
 
@@ -147,7 +149,7 @@ def quant_sequential(model, dataloader, dev):
         for name in gptq:
             handles.append(subset[name].register_forward_hook(add_batch(name)))
         for j in range(args.nsamples):
-            outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask)[0]
+            outs[j] = layer(inps[j].unsqueeze(0).to(dtype), attention_mask=attention_mask)[0]
             mark_step(dev)
         for h in handles:
             h.remove()
@@ -162,7 +164,7 @@ def quant_sequential(model, dataloader, dev):
             gptq[name].free()
 
         for j in range(args.nsamples):
-            outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask)[0]
+            outs[j] = layer(inps[j].unsqueeze(0).to(dtype), attention_mask=attention_mask)[0]
             mark_step(dev)
 
         layers[i] = layer.cpu()
@@ -269,12 +271,14 @@ if __name__ == "__main__":
     if args.load_quantized:
         model = get_model(save_file)
         model.eval()
+        if device.type == "xla":
+            model = to_xla_compute(model)
     else: # braq
         model = get_model(args.model)
         model.eval()
         if device.type == "xla":
             # TPUs have no fp16 path (fp16 Linear lowers to mixed f16/f32 HLO): run the fp16 checkpoint in fp32.
-            model = model.float()
+            model = to_xla_compute(model)
         tick = time.time()
         dataloader, testloader = get_loaders(
             args.dataset,
