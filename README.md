@@ -1,3 +1,17 @@
+## TPU migration: result curves
+
+This repository records an agent-driven migration of the original code from NVIDIA GPUs to Google Cloud TPUs, part of the study *Can Coding Agents Migrate Machine Learning Projects Across Hardware Accelerators?* (ICSE 2027 SEIP). The original project's README follows below the figures.
+
+**The GPU full run of the original code and the TPU smoke test of attempt 7; the migration was stopped before a TPU full run.** ([PDF](migration_figures/curves.pdf))
+
+![curves](migration_figures/curves.png)
+
+**Smoke test before the full run: the original code on the GPU against the migrated code on the TPU.** ([PDF](migration_figures/smoke_compare.pdf))
+
+![smoke_compare](migration_figures/smoke_compare.png)
+
+---
+
 # BiLLM: Pushing the Limit of Post-Training Quantization for LLMs [[PDF]](https://arxiv.org/pdf/2402.04291.pdf)
 
 ![intuition](imgs/author.png)
